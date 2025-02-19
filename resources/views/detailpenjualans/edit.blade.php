@@ -15,34 +15,25 @@
             <div class="col-md-12">
                 <div class="card border-0 shadow-sm rounded">
                     <div class="card-body">
-                        <form action="{{ route('detailpenjualans.update', $detailpenjualan->id_detail) }}" method="POST" enctype="multipart/form-data">
+                        <form action="{{ route('detailpenjualans.update', $detailpenjualan->id_detail) }}" method="POST">
                             @csrf
                             @method('PUT')
 
                             <div class="form-group">
                                 <label class="font-weight-bold">ID DETAIL</label>
-                                <input type="text" class="form-control @error('id_detail') is-invalid @enderror" name="id_detail" value="{{ old('id_detail', $formattedIdDetail) }}" readonly>
-                                @error('id_detail')
-                                    <div class="alert alert-danger mt-2">{{ $message }}</div>
-                                @enderror
+                                <input type="text" class="form-control" name="id_detail" value="{{ old('id_detail', $formattedIdDetail) }}" readonly>
                             </div>
 
                             <div class="form-group">
                                 <label class="font-weight-bold">ID PENJUALAN</label>
-                                <select class="form-control @error('id_penjualan') is-invalid @enderror" name="id_penjualan">
+                                <select class="form-control" name="id_penjualan">
                                     <option value="">-- Pilih Penjualan --</option>
-                                    @foreach($penjualans as $index => $penjualan)
-                                    <option value="{{ str_pad($penjualan->id_penjualan, 2, '0', STR_PAD_LEFT) }}" 
-                                        {{ $penjualan->id_penjualan == $detailpenjualan->id_penjualan ? 'selected' : '' }}>
-                                        {{ str_pad($penjualan->id_penjualan, 2, '0', STR_PAD_LEFT) }} - 
-                                        {{ $index + 1 }} -  <!-- Menampilkan ID Pelanggan sebagai angka urut -->
-                                        {{ $penjualan->pelanggan->nama_pelanggan ?? 'Nama Tidak Ditemukan' }}
+                                    @foreach($penjualans as $penjualan)
+                                    <option value="{{ $penjualan->id_penjualan }}" {{ $penjualan->id_penjualan == $detailpenjualan->id_penjualan ? 'selected' : '' }}>
+                                        {{ $penjualan->id_penjualan }} - {{ $penjualan->pelanggan->nama_pelanggan ?? 'Nama Tidak Ditemukan' }}
                                     </option>
                                     @endforeach
                                 </select>
-                                @error('id_penjualan')
-                                    <div class="alert alert-danger mt-2">{{ $message }}</div>
-                                @enderror
                             </div>
 
                             <div id="product-container">
@@ -53,10 +44,9 @@
                                         <select class="form-control product-select" name="id_produk[]">
                                             <option value="">-- Pilih Produk --</option>
                                             @foreach($produks ?? [] as $produk)
-                                            <option value="{{ str_pad($produk->id_produk, 3, '0', STR_PAD_LEFT) }}" 
-                                                data-harga="{{ $produk->harga }}" 
+                                            <option value="{{ $produk->id_produk }}" data-harga="{{ $produk->harga }}" data-stok="{{ $produk->stok }}"
                                                 {{ $produk->id_produk == $product->id_produk ? 'selected' : '' }}>
-                                                {{ str_pad($produk->id_produk, 3, '0', STR_PAD_LEFT) }} - {{ $produk->nama_produk }}
+                                                {{ $produk->id_produk }} - {{ $produk->nama_produk }} (Stok: {{ $produk->stok }})
                                             </option>
                                             @endforeach
                                         </select>
@@ -74,15 +64,11 @@
 
                             <div class="form-group">
                                 <label class="font-weight-bold">SUBTOTAL</label>
-                                <input type="text" class="form-control @error('subtotal') is-invalid @enderror" name="subtotal" value="{{ old('subtotal', $detailpenjualan->subtotal) }}" placeholder="Subtotal" readonly>
-                                @error('subtotal')
-                                    <div class="alert alert-danger mt-2">{{ $message }}</div>
-                                @enderror
+                                <input type="text" class="form-control" name="subtotal" value="{{ old('subtotal', $detailpenjualan->subtotal) }}" readonly>
                             </div>
 
-                            <button type="submit" class="btn btn-md btn-primary">UPDATE</button>
-                            <button type="reset" class="btn btn-md btn-warning">RESET</button>
-                            <a href="{{ url()->previous() }}" class="btn btn-md btn-secondary">KEMBALI</a>
+                            <button type="submit" class="btn btn-primary">UPDATE</button>
+                            <a href="{{ url()->previous() }}" class="btn btn-secondary">KEMBALI</a>
                         </form> 
                     </div>
                 </div>
@@ -94,7 +80,18 @@
 <script>
     $(document).ready(function () {
         $(document).on('change', '.product-select', updateSubtotal);
-        $(document).on('input', '.product-quantity', updateSubtotal);
+        $(document).on('input', '.product-quantity', function () {
+            let jumlahInput = $(this);
+            let jumlah = parseInt(jumlahInput.val()) || 0;
+            let selectedProduct = jumlahInput.closest('.product-row').find('.product-select option:selected');
+            let stok = parseInt(selectedProduct.data('stok')) || 0;
+
+            if (jumlah > stok) {
+                alert(`Stok tidak mencukupi! Maksimal ${stok} unit.`);
+                jumlahInput.val(stok);
+            }
+            updateSubtotal();
+        });
 
         function updateSubtotal() {
             let subtotal = 0;
@@ -103,9 +100,7 @@
                 const jumlah = parseFloat($(this).find('.product-quantity').val()) || 0;
                 subtotal += harga * jumlah;
             });
-
-            const subtotalFormatted = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 2 }).format(subtotal);
-            $('input[name="subtotal"]').val(subtotalFormatted);
+            $('input[name="subtotal"]').val(subtotal.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' }));
         }
 
         window.addProductRow = function () {
@@ -115,8 +110,8 @@
                         <select class="form-control product-select" name="id_produk[]">
                             <option value="">-- Pilih Produk --</option>
                             @foreach($produks as $produk)
-                            <option value="{{ $produk->id_produk }}" data-harga="{{ $produk->harga }}">
-                                {{ $produk->id_produk }} - {{ $produk->nama_produk }}
+                            <option value="{{ $produk->id_produk }}" data-harga="{{ $produk->harga }}" data-stok="{{ $produk->stok }}">
+                                {{ $produk->id_produk }} - {{ $produk->nama_produk }} (Stok: {{ $produk->stok }})
                             </option>
                             @endforeach
                         </select>

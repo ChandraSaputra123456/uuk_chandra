@@ -59,8 +59,10 @@
                                         <select class="form-control product-select" name="id_produk[]">
                                             <option value="">-- Pilih Produk --</option>
                                             @foreach($produks as $produk)
-                                            <option value="{{ str_pad($produk->id_produk, 3, '0', STR_PAD_LEFT) }}" data-harga="{{ $produk->harga }}">
-                                                {{ str_pad($produk->id_produk, 3, '0', STR_PAD_LEFT) }} - {{ $produk->nama_produk }}
+                                            <option value="{{ str_pad($produk->id_produk, 3, '0', STR_PAD_LEFT) }}" 
+                                                    data-harga="{{ $produk->harga }}" 
+                                                    data-stok="{{ $produk->stok }}">
+                                                {{ str_pad($produk->id_produk, 3, '0', STR_PAD_LEFT) }} - {{ $produk->nama_produk }} (Stok: {{ $produk->stok }})
                                             </option>
                                             @endforeach
                                         </select>
@@ -98,23 +100,85 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 <script>
+    $(document).ready(function () {
+    updateSubtotal();
+    updateStockDisplay();
 
-$(document).ready(function () {
-    // Event ketika dropdown produk berubah
     $(document).on('change', '.product-select', function () {
+        updateStockDisplay();
         updateSubtotal();
     });
 
-    // Event ketika jumlah produk berubah
     $(document).on('input', '.product-quantity', function () {
+        let jumlahInput = $(this);
+        let jumlah = parseInt(jumlahInput.val()) || 0;
+        let selectedProduct = jumlahInput.closest('.product-row').find('.product-select option:selected');
+        let stok = parseInt(selectedProduct.data('stok')) || 0;
+        let selectedProductId = selectedProduct.val();
+
+        let totalUsed = calculateTotalUsed(selectedProductId);
+
+        if (totalUsed > stok) {
+            alert(`Stok tidak mencukupi! Hanya tersisa ${stok - (totalUsed - jumlah)} unit.`);
+            jumlahInput.val(stok - (totalUsed - jumlah));
+        }
+
         updateSubtotal();
+        updateStockDisplay();
     });
 
-    // Fungsi untuk menghitung subtotal total
+    function calculateTotalUsed(productId) {
+        let total = 0;
+        $('.product-row').each(function () {
+            let selectedProduct = $(this).find('.product-select option:selected').val();
+            let jumlah = parseInt($(this).find('.product-quantity').val()) || 0;
+
+            if (selectedProduct === productId) {
+                total += jumlah;
+            }
+        });
+        return total;
+    }
+
+    function updateStockDisplay() {
+        let productStockMap = {};
+
+        $('.product-select option').each(function () {
+            let productId = $(this).val();
+            let stok = $(this).data('stok');
+
+            if (productId) {
+                productStockMap[productId] = stok;
+            }
+        });
+
+        $('.product-row').each(function () {
+            let selectedProduct = $(this).find('.product-select option:selected').val();
+            let jumlah = parseInt($(this).find('.product-quantity').val()) || 0;
+
+            if (selectedProduct && productStockMap[selectedProduct] !== undefined) {
+                productStockMap[selectedProduct] -= jumlah;
+            }
+        });
+
+        $('.product-row').each(function () {
+            let selectElement = $(this).find('.product-select');
+            let stokLabel = $(this).find('.stok-label');
+
+            let selectedProduct = selectElement.find("option:selected").val();
+            let stokTersisa = productStockMap[selectedProduct] || 0;
+
+            if (stokLabel.length) {
+                stokLabel.text(`Stok tersisa: ${stokTersisa}`);
+            } else {
+                selectElement.closest('.product-row').append(`<small class="stok-label text-muted ml-2">Stok tersisa: ${stokTersisa}</small>`);
+            }
+        });
+    }
+
     function updateSubtotal() {
         let subtotal = 0;
 
-        // Iterasi melalui semua baris produk
         $('.product-row').each(function () {
             const harga = parseFloat($(this).find('.product-select option:selected').data('harga')) || 0;
             const jumlah = parseFloat($(this).find('.product-quantity').val()) || 0;
@@ -122,18 +186,15 @@ $(document).ready(function () {
             subtotal += harga * jumlah;
         });
 
-        // Format subtotal menjadi format mata uang
         const subtotalFormatted = new Intl.NumberFormat('id-ID', {
             style: 'currency',
             currency: 'IDR',
             minimumFractionDigits: 2,
         }).format(subtotal);
 
-        // Set nilai subtotal ke input utama
         $('input[name="subtotal"]').val(subtotalFormatted);
     }
 
-    // Fungsi untuk menambah baris produk
     window.addProductRow = function () {
         const rowHtml = `
             <div class="form-group row product-row">
@@ -141,11 +202,12 @@ $(document).ready(function () {
                     <select class="form-control product-select" name="id_produk[]">
                         <option value="">-- Pilih Produk --</option>
                         @foreach($produks as $produk)
-                        <option value="{{ $produk->id_produk }}" data-harga="{{ $produk->harga }}">
-                            {{ $produk->id_produk }} - {{ $produk->nama_produk }}
+                        <option value="{{ $produk->id_produk }}" data-harga="{{ $produk->harga }}" data-stok="{{ $produk->stok }}">
+                            {{ $produk->id_produk }} - {{ $produk->nama_produk }} (Stok: {{ $produk->stok }})
                         </option>
                         @endforeach
                     </select>
+                    <small class="stok-label text-muted ml-2"></small>
                 </div>
                 <div class="col-md-2">
                     <input type="number" class="form-control product-quantity" name="jumlah_produk[]" min="1" step="1" placeholder="Jumlah">
@@ -155,18 +217,21 @@ $(document).ready(function () {
                 </div>
             </div>`;
         $('#product-container').append(rowHtml);
+        updateStockDisplay();
     };
 
-    // Fungsi untuk menghapus baris produk
     window.removeProductRow = function (button) {
         $(button).closest('.product-row').remove();
         updateSubtotal();
+        updateStockDisplay();
     };
 });
 
 
 
+
 </script>
+    
 
 
 </body>
